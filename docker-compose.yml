@@ -1,0 +1,115 @@
+# copyright © mohammad abo sultan
+
+version: ${DOCKER_COMPOSE_VERSION}
+
+services:
+  php-server:
+    build:
+      context: ./dockers/php
+      dockerfile: php.dockerfile
+    image : php-server-image
+    container_name: php-server
+    restart: unless-stopped
+    expose:
+      - 9000
+    volumes:
+    - ./src:/var/www/html
+    networks:
+      - laravel
+
+
+  site:
+    image: nginx:${NGINX_VERSION}
+    container_name: site
+    ports:
+    - ${SITE_PORT}:80
+    volumes:
+    - ./src:/var/www/html
+    - ./dockers/nginx/default.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - php-server
+      - db
+      - composer
+      - npm
+    networks:
+      - laravel
+
+  db:
+    image: mariadb:${MARIADB_VERSION}
+    container_name: db
+    restart: unless-stopped
+    ports:
+    - 3306:3306
+    volumes:
+    - ./dockers/mysql:/var/lib/mysql
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+    networks:
+      - laravel
+
+  phpmyadmin:
+    image: phpmyadmin
+    container_name: phpmyadmin
+    restart: unless-stopped
+    ports:
+      - ${PMA_PORT}:80
+    depends_on:
+      - db
+    environment:
+      PMA_HOST: db
+    networks:
+      - laravel
+
+  artisan:
+    build:
+      context: ./dockers/php
+      dockerfile: php.dockerfile
+    image: artisan
+    container_name: artisan
+    entrypoint: ['php' , '/var/www/html/artisan']
+    depends_on:
+      - db
+    volumes:
+    - ./src:/var/www/html
+    working_dir: /var/www/html
+    networks:
+      - laravel
+
+
+  composer:
+    image: composer:${COMPOSER_VERSION}
+    container_name: composer
+    volumes:
+    - ./src:/var/www/html
+    working_dir: /var/www/html
+    networks:
+      - laravel
+
+  npm:
+    image: node:${NODE_VERSION}
+    container_name: npm
+    ports:
+      - 3000:3000
+      - 3001:3001
+    entrypoint: ['npm']
+    volumes:
+    - ./src:/var/www/html
+    working_dir: /var/www/html
+    networks:
+      - laravel
+
+  mailhog:
+    image: mailhog/mailhog:${MAILHOG_VERSION}
+    container_name: mailhog
+    ports:
+    - 1025:1025 # smtp server
+    - 8025:8025 # web ui
+    networks:
+      - laravel
+
+networks:
+  laravel:
+    driver: bridge
