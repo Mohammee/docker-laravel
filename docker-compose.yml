@@ -3,12 +3,15 @@
 version: ${DOCKER_COMPOSE_VERSION}
 
 services:
-  php-server:
+  php:
     build:
       context: ./dockers/php
       dockerfile: php.dockerfile
-    image : php-server-image
-    container_name: php-server
+      args:
+        - UID=${UID:-1000}
+        - GID=${GID:-1000}
+    image : php
+    container_name: php
     restart: unless-stopped
     expose:
       - 9000
@@ -23,11 +26,12 @@ services:
     container_name: site
     ports:
     - ${SITE_PORT}:80
+    - ${SITE_PORT_SECURE}:443
     volumes:
     - ./src:/var/www/html
     - ./dockers/nginx/default.conf:/etc/nginx/conf.d/default.conf
     depends_on:
-      - php-server
+      - php
       - db
       - composer
       - npm
@@ -47,6 +51,8 @@ services:
       MYSQL_USER: ${DB_USER}
       MYSQL_PASSWORD: ${DB_PASSWORD}
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      SERVICE_NAME: mysql
+      SERVICE_TAGS: dev
     networks:
       - laravel
 
@@ -63,10 +69,22 @@ services:
     networks:
       - laravel
 
+  redis:
+    image: redis:alpine
+    container_name: redis
+    restart: unless-stopped
+    ports:
+      - 6379:6379
+    networks:
+      - laravel
+
   artisan:
     build:
       context: ./dockers/php
       dockerfile: php.dockerfile
+      args:
+        - UID=${UID:-1000}
+        - GID=${GID:-1000}
     image: artisan
     container_name: artisan
     entrypoint: ['php' , '/var/www/html/artisan']
@@ -85,6 +103,7 @@ services:
     volumes:
     - ./src:/var/www/html
     working_dir: /var/www/html
+    entrypoint: ['composer', '--ignore-platform-reqs']
     networks:
       - laravel
 
@@ -109,6 +128,19 @@ services:
     - 8025:8025 # web ui
     networks:
       - laravel
+
+  cron:
+    build:
+      context: ./dockers/cron
+      dockerfile: cron.dockerfile
+    image: cron
+    container_name: cron
+    depends_on:
+      - db
+    volumes:
+    - ./src:/var/www/html
+    networks:
+      laravel:
 
 networks:
   laravel:
